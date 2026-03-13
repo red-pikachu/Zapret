@@ -1,0 +1,19 @@
+name: Zapret2Mac
+options:
+  bundleIdPrefix: com.lisa
+targets:
+  Zapret2Mac:
+    type: application
+    platform: macOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: main.swift
+    info:
+      path: Zapret.app/Contents/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleIconFile: "AppIcon"
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.lisa.Zapret2Mac
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies: []

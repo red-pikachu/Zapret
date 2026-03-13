@@ -1,0 +1,32 @@
+[
+  {
+    "id": "fake_split",
+    "name": "Fake + Split (Default)",
+    "args": "--lua-desync=desync:desync=fake,split2;fake_type=tls_clienthello"
+  },
+  {
+    "id": "disorder",
+    "name": "Disorder",
+    "args": "--lua-desync=desync:desync=disorder2;fake_type=tls_clienthello"
+  },
+  {
+    "id": "syndata",
+    "name": "Syndata",
+    "args": "--lua-desync=desync:desync=syndata"
+  },
+  {
+    "id": "flowseal_general",
+    "name": "Flowseal General (v1.9.7)",
+    "args": "--lua-desync=desync:desync=multisplit;split_seqovl=568;split_pos=1;split_seqovl_pattern=@quic_initial_www_google_com.bin"
+  },
+  {
+    "id": "flowseal_discord",
+    "name": "Flowseal Discord",
+    "args": "--lua-desync=desync:desync=fake;repeats=6;fake_type=tls_clienthello"
+  },
+  {
+    "id": "flowseal_youtube",
+    "name": "Flowseal YouTube (Multisplit)",
+    "args": "--lua-desync=desync:desync=multisplit;split_seqovl=681;split_pos=1"
+  }
+]
