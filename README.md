@@ -37,6 +37,3 @@
 1.  Установите `xcodegen`: `brew install xcodegen`.
 2.  Выполните `xcodegen` в корне проекта.
 3.  Откройте `Zapret2Mac.xcodeproj` в Xcode и соберите (Product -> Build).
-
----
-*Разработано с помощью Лизы (Gemini CLI).*
