@@ -8,6 +8,23 @@ targets:
     deploymentTarget: "11.0"
     sources:
       - path: main.swift
+    postBuildScripts:
+      - name: Copy Resources
+        script: |
+          DEST="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Resources"
+          mkdir -p "$DEST"
+          cp "$SRCROOT/Resources/tpws"        "$DEST/tpws"
+          cp "$SRCROOT/Resources/wrapper.sh"  "$DEST/wrapper.sh"
+          cp "$SRCROOT/Resources/AppIcon.icns" "$DEST/AppIcon.icns"
+          chmod +x "$DEST/tpws" "$DEST/wrapper.sh"
+        inputFiles:
+          - $(SRCROOT)/Resources/tpws
+          - $(SRCROOT)/Resources/wrapper.sh
+          - $(SRCROOT)/Resources/AppIcon.icns
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tpws
+          - $(TARGET_BUILD_DIR)/$(PRODUCT_NAME).app/Contents/Resources/wrapper.sh
+          - $(TARGET_BUILD_DIR)/$(PRODUCT_NAME).app/Contents/Resources/AppIcon.icns
     info:
       path: Zapret.app/Contents/Info.plist
       properties:

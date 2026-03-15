@@ -40,6 +40,7 @@
 			buildConfigurationList = 4252FFF1048EBAC078751B18 /* Build configuration list for PBXNativeTarget "Zapret2Mac" */;
 			buildPhases = (
 				CDE37C9CF28CEAEDB869EC20 /* Sources */,
+				34C8E298171C25023CE26F1D /* Copy Resources */,
 			);
 			buildRules = (
 			);
@@ -81,6 +82,33 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		34C8E298171C25023CE26F1D /* Copy Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Resources/tpws",
+				"$(SRCROOT)/Resources/wrapper.sh",
+				"$(SRCROOT)/Resources/AppIcon.icns",
+			);
+			name = "Copy Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tpws",
+				"$(TARGET_BUILD_DIR)/$(PRODUCT_NAME).app/Contents/Resources/wrapper.sh",
+				"$(TARGET_BUILD_DIR)/$(PRODUCT_NAME).app/Contents/Resources/AppIcon.icns",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "DEST=\"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app/Contents/Resources\"\nmkdir -p \"$DEST\"\ncp \"$SRCROOT/Resources/tpws\"        \"$DEST/tpws\"\ncp \"$SRCROOT/Resources/wrapper.sh\"  \"$DEST/wrapper.sh\"\ncp \"$SRCROOT/Resources/AppIcon.icns\" \"$DEST/AppIcon.icns\"\nchmod +x \"$DEST/tpws\" \"$DEST/wrapper.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		CDE37C9CF28CEAEDB869EC20 /* Sources */ = {

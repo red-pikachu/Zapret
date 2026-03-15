@@ -1,5 +1,4 @@
 import Cocoa
-import ServiceManagement
 import UserNotifications
 
 struct Strategy: Codable, Equatable {
@@ -15,246 +14,217 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     var toggleMenuItem: NSMenuItem!
     var strategyMenu: NSMenu!
     var strategies: [Strategy] = []
-    
-    // Default strategies if no file exists
+
     let defaultStrategies: [Strategy] = [
-        Strategy(id: "fake_split", name: "Fake + Split (Default)", args: "--lua-desync=desync:desync=fake,split2;fake_type=tls_clienthello"),
-        Strategy(id: "disorder", name: "Disorder", args: "--lua-desync=desync:desync=disorder2;fake_type=tls_clienthello"),
-        Strategy(id: "syndata", name: "Syndata", args: "--lua-desync=desync:desync=syndata"),
-        Strategy(id: "flowseal_general", name: "Flowseal General (v1.9.7)", args: "--lua-desync=desync:desync=multisplit;split_seqovl=568;split_pos=1;split_seqovl_pattern=@quic_initial_www_google_com.bin"),
-        Strategy(id: "flowseal_discord", name: "Flowseal Discord", args: "--lua-desync=desync:desync=fake;repeats=6;fake_type=tls_clienthello"),
-        Strategy(id: "flowseal_youtube", name: "Flowseal YouTube (Multisplit)", args: "--lua-desync=desync:desync=multisplit;split_seqovl=681;split_pos=1")
+        Strategy(id: "disorder_midsld", name: "Disorder midsld (рекомендуется)", args: "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"),
+        Strategy(id: "disorder_oob",    name: "Disorder + OOB",                  args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"),
+        Strategy(id: "tlsrec_sniext",   name: "TLS Record (sniext)",             args: "--filter-tcp=443 --tlsrec=sniext+1"),
+        Strategy(id: "split_midsld",    name: "Split midsld",                    args: "--filter-tcp=443 --split-pos=midsld"),
+        Strategy(id: "disorder_pos2",   name: "Disorder pos=2",                  args: "--filter-tcp=443 --split-pos=2 --disorder"),
+        Strategy(id: "methodeol_only",  name: "HTTP MethodEOL (только port 80)", args: "--filter-tcp=80 --methodeol")
     ]
-    
+
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        // Request Notification permissions
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
-            // Handle permission if needed
-        }
-        
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        
         if let button = statusItem.button {
             let config = NSImage.SymbolConfiguration(scale: .large)
             button.image = NSImage(systemSymbolName: "shield.slash", accessibilityDescription: "Zapret Stopped")?.withSymbolConfiguration(config)
         }
-        
+
         loadStrategies()
         setupMenu()
         updateUI()
     }
-    
+
     func sendNotification(title: String, body: String) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
-        
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
-    
-    // Allow notifications to show even if app is active
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
     }
-    
+
+    // MARK: — Strategies
+
     func getStrategiesFileURL() -> URL {
-        let fileManager = FileManager.default
-        let homeDir = fileManager.homeDirectoryForCurrentUser
-        let configDir = homeDir.appendingPathComponent(".zapret2")
-        return configDir.appendingPathComponent("strategies.json")
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".zapret2")
+            .appendingPathComponent("strategies.json")
     }
-    
+
     func loadStrategies() {
         let fileURL = getStrategiesFileURL()
         if let data = try? Data(contentsOf: fileURL),
            let decoded = try? JSONDecoder().decode([Strategy].self, from: data) {
-            self.strategies = decoded
+            strategies = decoded
         } else {
-            self.strategies = defaultStrategies
+            strategies = defaultStrategies
             let configDir = fileURL.deletingLastPathComponent()
-            try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true, attributes: nil)
-            if let encoded = try? JSONEncoder().encode(self.strategies) {
+            try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+            if let encoded = try? JSONEncoder().encode(strategies) {
                 try? encoded.write(to: fileURL)
             }
         }
     }
-    
+
+    // MARK: — Menu
+
     func setupMenu() {
         let menu = NSMenu()
-        
-        statusMenuItem = NSMenuItem(title: "Status: Stopped", action: nil, keyEquivalent: "")
+
+        statusMenuItem = NSMenuItem(title: "Статус: Остановлен", action: nil, keyEquivalent: "")
         menu.addItem(statusMenuItem)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        toggleMenuItem = NSMenuItem(title: "Start Zapret", action: #selector(toggleZapret), keyEquivalent: "s")
+        menu.addItem(.separator())
+
+        toggleMenuItem = NSMenuItem(title: "Запустить Zapret", action: #selector(toggleZapret), keyEquivalent: "s")
         menu.addItem(toggleMenuItem)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        // --- Strategy Submenu ---
-        let strategyMenuItem = NSMenuItem(title: "Strategy", action: nil, keyEquivalent: "")
+        menu.addItem(.separator())
+
+        // Strategy submenu
+        let strategyMenuItem = NSMenuItem(title: "Стратегия", action: nil, keyEquivalent: "")
         strategyMenu = NSMenu()
         rebuildStrategyMenu()
         strategyMenuItem.submenu = strategyMenu
         menu.addItem(strategyMenuItem)
-        
-        // --- Settings Submenu ---
-        let settingsMenuItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+
+        // Settings submenu
+        let settingsMenuItem = NSMenuItem(title: "Настройки", action: nil, keyEquivalent: "")
         let settingsMenu = NSMenu()
-        
-        settingsMenu.addItem(NSMenuItem(title: "Open Config Folder", action: #selector(openConfigFolder), keyEquivalent: ""))
-        settingsMenu.addItem(NSMenuItem(title: "Add Custom Source URL...", action: #selector(promptForCustomURL), keyEquivalent: ""))
-        
-        settingsMenu.addItem(NSMenuItem.separator())
-        
-        let launchMenuItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
-        launchMenuItem.state = .off
-        settingsMenu.addItem(launchMenuItem)
-        
-        // Sudoers Setup
-        settingsMenu.addItem(NSMenuItem.separator())
-        settingsMenu.addItem(NSMenuItem(title: "Grant Passwordless Access...", action: #selector(setupSudoers), keyEquivalent: ""))
-        
+        settingsMenu.addItem(NSMenuItem(title: "Открыть папку конфигов",          action: #selector(openConfigFolder),          keyEquivalent: ""))
+        settingsMenu.addItem(NSMenuItem(title: "Обновить стратегии",             action: #selector(fetchStrategies),           keyEquivalent: ""))
+        settingsMenu.addItem(NSMenuItem(title: "Изменить источник стратегий...", action: #selector(updateStrategiesFromURL),   keyEquivalent: ""))
+        settingsMenu.addItem(NSMenuItem(title: "Сбросить стратегии на дефолт",  action: #selector(resetStrategies),           keyEquivalent: ""))
+        settingsMenu.addItem(.separator())
+        settingsMenu.addItem(NSMenuItem(title: "Разрешить запуск без пароля...", action: #selector(setupSudoers),            keyEquivalent: ""))
         settingsMenuItem.submenu = settingsMenu
         menu.addItem(settingsMenuItem)
-        
-        // --- Open Logs ---
-        menu.addItem(NSMenuItem(title: "Open Logs", action: #selector(openLogs), keyEquivalent: ""))
-        
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        
+
+        menu.addItem(NSMenuItem(title: "Открыть лог", action: #selector(openLogs), keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Выход", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
         statusItem.menu = menu
     }
-    
+
     func rebuildStrategyMenu() {
         strategyMenu.removeAllItems()
-        let savedStrategyId = UserDefaults.standard.string(forKey: "ZapretStrategyId") ?? "fake_split"
-        
+        let savedId = UserDefaults.standard.string(forKey: "ZapretStrategyId") ?? "disorder_midsld"
         for strategy in strategies {
             let item = NSMenuItem(title: strategy.name, action: #selector(selectStrategy(_:)), keyEquivalent: "")
             item.representedObject = strategy.id
-            if strategy.id == savedStrategyId {
-                item.state = .on
-            }
+            item.state = (strategy.id == savedId) ? .on : .off
             strategyMenu.addItem(item)
         }
     }
-    
+
+    // MARK: — Actions
+
+    @objc func selectStrategy(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        UserDefaults.standard.set(id, forKey: "ZapretStrategyId")
+        strategyMenu.items.forEach { $0.state = ($0 == sender) ? .on : .off }
+
+        if isRunning {
+            toggleZapret()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { self.toggleZapret() }
+        }
+    }
+
+    private static let defaultStrategiesURL = "https://raw.githubusercontent.com/red-pikachu/Zapret2Mac/main/strategies.json"
+
+    var strategiesSourceURL: String {
+        UserDefaults.standard.string(forKey: "ZapretCustomSourceURL") ?? Self.defaultStrategiesURL
+    }
+
+    @objc func fetchStrategies() {
+        guard let url = URL(string: strategiesSourceURL) else {
+            sendNotification(title: "Ошибка", body: "Некорректный URL источника.")
+            return
+        }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+            guard let data, error == nil else {
+                self?.sendNotification(title: "Ошибка загрузки", body: "Не удалось подключиться к источнику.")
+                return
+            }
+            guard let decoded = try? JSONDecoder().decode([Strategy].self, from: data) else {
+                self?.sendNotification(title: "Ошибка формата", body: "Файл не является корректным strategies.json.")
+                return
+            }
+            DispatchQueue.main.async {
+                self?.strategies = decoded
+                try? data.write(to: self!.getStrategiesFileURL())
+                self?.rebuildStrategyMenu()
+                self?.sendNotification(title: "Стратегии обновлены", body: "Загружено \(decoded.count) стратегий.")
+            }
+        }.resume()
+    }
+
+    @objc func updateStrategiesFromURL() {
+        let alert = NSAlert()
+        alert.messageText = "Источник стратегий"
+        alert.informativeText = "Прямая ссылка на файл strategies.json в формате tpws:"
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 420, height: 24))
+        field.placeholderString = Self.defaultStrategiesURL
+        field.stringValue = strategiesSourceURL
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Сохранить и скачать")
+        alert.addButton(withTitle: "Отмена")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let urlString = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !urlString.isEmpty, URL(string: urlString) != nil else {
+            sendNotification(title: "Ошибка", body: "Некорректный URL.")
+            return
+        }
+        UserDefaults.standard.set(urlString, forKey: "ZapretCustomSourceURL")
+        fetchStrategies()
+    }
+
+    @objc func resetStrategies() {
+        strategies = defaultStrategies
+        if let encoded = try? JSONEncoder().encode(strategies) {
+            try? encoded.write(to: getStrategiesFileURL())
+        }
+        rebuildStrategyMenu()
+        sendNotification(title: "Сброс выполнен", body: "Стратегии восстановлены по умолчанию.")
+    }
+
     @objc func setupSudoers() {
         guard let bundlePath = Bundle.main.resourcePath else { return }
         let wrapperPath = "\(bundlePath)/wrapper.sh"
         let userName = NSUserName()
-        
         let sudoersContent = "\(userName) ALL=(ALL) NOPASSWD: \(wrapperPath)"
-        
         let script = """
         do shell script "echo '\(sudoersContent)' > /private/etc/sudoers.d/zapret2_mac && chmod 440 /private/etc/sudoers.d/zapret2_mac" with administrator privileges
         """
-        
         var error: NSDictionary?
         if let scriptObject = NSAppleScript(source: script) {
             scriptObject.executeAndReturnError(&error)
             if error != nil {
-                print("Failed to setup sudoers: \(String(describing: error))")
-                sendNotification(title: "Setup Failed", body: "Could not grant passwordless access.")
+                sendNotification(title: "Ошибка настройки", body: "Не удалось разрешить запуск без пароля.")
             } else {
-                sendNotification(title: "Setup Successful", body: "Zapret can now start without asking for a password.")
+                sendNotification(title: "Настройка выполнена", body: "Запret будет запускаться без запроса пароля.")
             }
         }
     }
-    
-    @objc func promptForCustomURL() {
-        // ... (existing prompt logic)
-        let alert = NSAlert()
-        alert.messageText = "Update Strategies from JSON"
-        alert.informativeText = "Enter a direct URL to a raw strategies.json file:"
-        
-        let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 400, height: 24))
-        inputTextField.placeholderString = "https://raw.githubusercontent.com/.../strategies.json"
-        
-        if let savedURL = UserDefaults.standard.string(forKey: "ZapretCustomSourceURL") {
-            inputTextField.stringValue = savedURL
-        } else {
-            inputTextField.stringValue = "https://raw.githubusercontent.com/red-pikachu/Zapret2Mac/main/strategies.json"
-        }
-        
-        alert.accessoryView = inputTextField
-        alert.addButton(withTitle: "Download & Update")
-        alert.addButton(withTitle: "Cancel")
-        
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        
-        let customURLString = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: customURLString) else {
-            sendNotification(title: "Update Failed", body: "Invalid URL provided.")
-            return
-        }
-        
-        UserDefaults.standard.set(customURLString, forKey: "ZapretCustomSourceURL")
-        
-        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let data = data, error == nil else {
-                self?.sendNotification(title: "Download Failed", body: "Could not reach the provided URL.")
-                return
-            }
-            
-            if let decoded = try? JSONDecoder().decode([Strategy].self, from: data) {
-                DispatchQueue.main.async {
-                    self?.strategies = decoded
-                    if let fileURL = self?.getStrategiesFileURL() {
-                        try? data.write(to: fileURL)
-                    }
-                    self?.rebuildStrategyMenu()
-                    self?.sendNotification(title: "Update Successful", body: "Strategies updated from custom source!")
-                }
-            } else {
-                 self?.sendNotification(title: "Parse Error", body: "The file is not a valid strategies.json array.")
-            }
-        }
-        task.resume()
-    }
-    
-    @objc func selectStrategy(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String else { return }
-        UserDefaults.standard.set(id, forKey: "ZapretStrategyId")
-        
-        for item in strategyMenu.items {
-            item.state = (item == sender) ? .on : .off
-        }
-        
-        if isRunning {
-            toggleZapret() // stop
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                self.toggleZapret() // start again
-            }
-        }
-    }
-    
-    @objc func toggleLaunchAtLogin(_ sender: NSMenuItem) {
-        // Fallback for older compiler toolchain, or unimplemented for now
-        print("Launch at login requires newer SDK")
-    }
-    
+
     @objc func openConfigFolder() {
-        let fileManager = FileManager.default
-        let homeDir = fileManager.homeDirectoryForCurrentUser
-        let configURL = homeDir.appendingPathComponent(".zapret2")
-        
-        if !fileManager.fileExists(atPath: configURL.path) {
-            do {
-                try fileManager.createDirectory(at: configURL, withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                print("Error creating config dir: \(error)")
-            }
-        }
+        let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".zapret2")
+        try? FileManager.default.createDirectory(at: configURL, withIntermediateDirectories: true)
         NSWorkspace.shared.open(configURL)
     }
-    
+
     @objc func openLogs() {
         let logURL = URL(fileURLWithPath: "/tmp/zapret2.log")
         if !FileManager.default.fileExists(atPath: logURL.path) {
@@ -262,16 +232,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         NSWorkspace.shared.open(logURL)
     }
-    
-    func runCommandViaProcess(scriptPath: String, arguments: [String]) -> Bool {
+
+    // MARK: — Zapret control
+
+    func runCommand(scriptPath: String, arguments: [String]) -> Bool {
         let task = Process()
         task.launchPath = "/usr/bin/sudo"
         task.arguments = [scriptPath] + arguments
-        
         let pipe = Pipe()
         task.standardOutput = pipe
         task.standardError = pipe
-        
         do {
             try task.run()
             task.waitUntilExit()
@@ -280,75 +250,63 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return false
         }
     }
-    
+
     @objc func toggleZapret() {
         guard let bundlePath = Bundle.main.resourcePath else { return }
         let scriptPath = "\(bundlePath)/wrapper.sh"
         let command = isRunning ? "stop" : "start"
-        
-        var args: [String] = [command]
+
+        var args = [command]
         if command == "start" {
-            let savedStrategyId = UserDefaults.standard.string(forKey: "ZapretStrategyId") ?? "fake_split"
-            let strategy = strategies.first(where: { $0.id == savedStrategyId }) ?? defaultStrategies[0]
+            let savedId = UserDefaults.standard.string(forKey: "ZapretStrategyId") ?? "disorder_midsld"
+            let strategy = strategies.first(where: { $0.id == savedId }) ?? defaultStrategies[0]
             args.append(strategy.args)
         }
-        
-        // First try to run silently using Process + sudo (relies on sudoers setup)
-        if runCommandViaProcess(scriptPath: scriptPath, arguments: args) {
+
+        // Тихий запуск через sudo (sudoers настроен)
+        if runCommand(scriptPath: scriptPath, arguments: args) {
             isRunning.toggle()
             updateUI()
             return
         }
-        
-        // If it fails (probably needs password), fallback to AppleScript
-        let argsString = args.dropFirst().joined(separator: " ")
-        let appleScriptSource = """
-        do shell script "\(scriptPath) \(command) \(argsString)" with administrator privileges
+
+        // Фоллбек: AppleScript с запросом пароля
+        let strategyArgs = args.dropFirst().joined(separator: " ")
+        let appleScript = """
+        do shell script "\(scriptPath) \(command) \(strategyArgs)" with administrator privileges
         """
-        
         var error: NSDictionary?
-        if let scriptObject = NSAppleScript(source: appleScriptSource) {
-            let output = scriptObject.executeAndReturnError(&error)
-            if error != nil {
-                print("Error: \(String(describing: error))")
-                return
-            } else {
-                print("Success: \(output.stringValue ?? "no output")")
+        if let script = NSAppleScript(source: appleScript) {
+            script.executeAndReturnError(&error)
+            if error == nil {
                 isRunning.toggle()
                 updateUI()
-            }
-        }
-    }
-    
-    func updateUI() {
-        if let button = statusItem.button {
-            let config = NSImage.SymbolConfiguration(scale: .large)
-            if isRunning {
-                statusMenuItem.title = "Status: Running"
-                toggleMenuItem.title = "Stop Zapret"
-                button.image = NSImage(systemSymbolName: "shield.lefthalf.filled", accessibilityDescription: "Zapret Running")?.withSymbolConfiguration(config)
             } else {
-                statusMenuItem.title = "Status: Stopped"
-                toggleMenuItem.title = "Start Zapret"
-                button.image = NSImage(systemSymbolName: "shield.slash", accessibilityDescription: "Zapret Stopped")?.withSymbolConfiguration(config)
+                sendNotification(title: "Ошибка", body: "Не удалось \(command == "start" ? "запустить" : "остановить") Zapret.")
             }
         }
     }
-    
-    func applicationWillTerminate(_ aNotification: Notification) {
+
+    func updateUI() {
+        guard let button = statusItem.button else { return }
+        let config = NSImage.SymbolConfiguration(scale: .large)
         if isRunning {
-            if let bundlePath = Bundle.main.resourcePath {
-                let scriptPath = "\(bundlePath)/wrapper.sh"
-                // Try silent process first
-                if !runCommandViaProcess(scriptPath: scriptPath, arguments: ["stop"]) {
-                    // Fallback to AppleScript
-                    let appleScriptSource = """
-                    do shell script "\(scriptPath) stop" with administrator privileges
-                    """
-                    if let scriptObject = NSAppleScript(source: appleScriptSource) {
-                        scriptObject.executeAndReturnError(nil)
-                    }
-                }
+            statusMenuItem.title = "Статус: Работает"
+            toggleMenuItem.title = "Остановить Zapret"
+            button.image = NSImage(systemSymbolName: "shield.lefthalf.filled", accessibilityDescription: "Zapret Running")?.withSymbolConfiguration(config)
+        } else {
+            statusMenuItem.title = "Статус: Остановлен"
+            toggleMenuItem.title = "Запустить Zapret"
+            button.image = NSImage(systemSymbolName: "shield.slash", accessibilityDescription: "Zapret Stopped")?.withSymbolConfiguration(config)
+        }
+    }
+
+    func applicationWillTerminate(_ aNotification: Notification) {
+        guard isRunning, let bundlePath = Bundle.main.resourcePath else { return }
+        let scriptPath = "\(bundlePath)/wrapper.sh"
+        if !runCommand(scriptPath: scriptPath, arguments: ["stop"]) {
+            if let script = NSAppleScript(source: "do shell script \"\(scriptPath) stop\" with administrator privileges") {
+                script.executeAndReturnError(nil)
             }
         }
     }
