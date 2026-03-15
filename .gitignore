@@ -1,0 +1,5 @@
+.DS_Store
+Zapret2Mac.xcodeproj/project.xcworkspace/xcuserdata/
+Zapret2Mac.xcodeproj/xcuserdata/
+DerivedData/
+*.xcuserstate

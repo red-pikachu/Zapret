@@ -13,7 +13,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     var statusMenuItem: NSMenuItem!
     var toggleMenuItem: NSMenuItem!
     var strategyMenu: NSMenu!
+    var autoCheckMenuItem: NSMenuItem!
+    var socks5MenuItem: NSMenuItem!
+    var socks5Process: Process?
     var strategies: [Strategy] = []
+
+    private static let socks5Port = 9988
 
     let defaultStrategies: [Strategy] = [
         Strategy(id: "disorder_midsld", name: "Disorder midsld (рекомендуется)", args: "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"),
@@ -92,6 +97,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Strategy submenu
         let strategyMenuItem = NSMenuItem(title: "Стратегия", action: nil, keyEquivalent: "")
         strategyMenu = NSMenu()
+        autoCheckMenuItem = NSMenuItem(title: "Подобрать лучшую стратегию...", action: #selector(autoSelectStrategy), keyEquivalent: "")
+        strategyMenu.addItem(autoCheckMenuItem)
+        strategyMenu.addItem(.separator())
         rebuildStrategyMenu()
         strategyMenuItem.submenu = strategyMenu
         menu.addItem(strategyMenuItem)
@@ -108,6 +116,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         settingsMenuItem.submenu = settingsMenu
         menu.addItem(settingsMenuItem)
 
+        socks5MenuItem = NSMenuItem(title: "SOCKS5 для Telegram: выключен", action: #selector(toggleSocks5), keyEquivalent: "")
+        menu.addItem(socks5MenuItem)
         menu.addItem(NSMenuItem(title: "Открыть лог", action: #selector(openLogs), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Выход", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -116,7 +126,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func rebuildStrategyMenu() {
-        strategyMenu.removeAllItems()
+        // Удаляем только стратегии, сохраняя первые 2 пункта (кнопка автовыбора + разделитель)
+        while strategyMenu.numberOfItems > 2 {
+            strategyMenu.removeItem(at: 2)
+        }
         let savedId = UserDefaults.standard.string(forKey: "ZapretStrategyId") ?? "disorder_midsld"
         for strategy in strategies {
             let item = NSMenuItem(title: strategy.name, action: #selector(selectStrategy(_:)), keyEquivalent: "")
@@ -191,6 +204,134 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         fetchStrategies()
     }
 
+    // MARK: — Auto Strategy Detection
+
+    private static let testURLs = [
+        "https://www.youtube.com",
+        "https://discord.com",
+        "https://www.instagram.com"
+    ]
+
+    @objc func autoSelectStrategy() {
+        guard let tpwsPath = Bundle.main.path(forResource: "tpws", ofType: nil) else {
+            sendNotification(title: "Ошибка", body: "tpws не найден в бандле.")
+            return
+        }
+
+        autoCheckMenuItem.title = "Тестирование..."
+        autoCheckMenuItem.action = nil
+        sendNotification(title: "Поиск стратегии", body: "Тестируем \(strategies.count) стратегий, это займёт ~\(strategies.count * 8) сек.")
+
+        let strategiesToTest = strategies
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            var results: [(Strategy, Bool, Double)] = []
+
+            for (i, strategy) in strategiesToTest.enumerated() {
+                let port = 19800 + i
+                let process = self.startTpwsSOCKS(path: tpwsPath, port: port, args: strategy.args)
+                Thread.sleep(forTimeInterval: 0.5)
+
+                let start = Date()
+                let ok = Self.testURLs.contains { self.testSOCKS5(port: port, urlString: $0) }
+                let elapsed = Date().timeIntervalSince(start)
+
+                process.terminate()
+                process.waitUntilExit()
+
+                results.append((strategy, ok, elapsed))
+            }
+
+            DispatchQueue.main.async {
+                self.autoCheckMenuItem.title = "Подобрать лучшую стратегию..."
+                self.autoCheckMenuItem.action = #selector(self.autoSelectStrategy)
+
+                let working = results.filter { $0.1 }.sorted { $0.2 < $1.2 }
+
+                if let best = working.first {
+                    UserDefaults.standard.set(best.0.id, forKey: "ZapretStrategyId")
+                    self.rebuildStrategyMenu()
+                }
+
+                self.showStrategyResults(results: results, best: working.first?.0)
+            }
+        }
+    }
+
+    private func showStrategyResults(results: [(Strategy, Bool, Double)], best: Strategy?) {
+        let alert = NSAlert()
+
+        if let best {
+            alert.messageText = "Стратегия выбрана: \(best.name)"
+            alert.alertStyle = .informational
+        } else {
+            alert.messageText = "Ни одна стратегия не сработала"
+            alert.alertStyle = .warning
+        }
+
+        let lines = results.map { (strategy, ok, elapsed) -> String in
+            let icon   = ok ? "✅" : "❌"
+            let time   = ok ? String(format: " (%.1f сек)", elapsed) : ""
+            let marker = strategy.id == best?.id ? " ← выбрана" : ""
+            return "\(icon) \(strategy.name)\(time)\(marker)"
+        }
+
+        let working = results.filter { $0.1 }.count
+        let summary = best != nil
+            ? "Работают \(working) из \(results.count). Активирована лучшая по скорости."
+            : "Блокировок не обнаружено или интернет недоступен. Оставлена прежняя стратегия."
+
+        alert.informativeText = lines.joined(separator: "\n") + "\n\n" + summary
+        alert.addButton(withTitle: best != nil ? "Применить и закрыть" : "Закрыть")
+
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
+
+    private func startTpwsSOCKS(path: String, port: Int, args: String) -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        var arguments = ["--socks", "--port=\(port)", "--bind-addr=127.0.0.1"]
+        arguments += args.components(separatedBy: " ").filter { !$0.isEmpty }
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        return process
+    }
+
+    private func testSOCKS5(port: Int, urlString: String) -> Bool {
+        guard let url = URL(string: urlString) else { return false }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.connectionProxyDictionary = [
+            kCFNetworkProxiesSOCKSEnable: 1,
+            kCFNetworkProxiesSOCKSProxy: "127.0.0.1",
+            kCFNetworkProxiesSOCKSPort: port
+        ]
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 10
+
+        let session = URLSession(configuration: config)
+        let semaphore = DispatchSemaphore(value: 0)
+        var success = false
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+
+        session.dataTask(with: request) { _, response, _ in
+            if let http = response as? HTTPURLResponse, http.statusCode < 500 {
+                success = true
+            }
+            semaphore.signal()
+        }.resume()
+
+        _ = semaphore.wait(timeout: .now() + 10)
+        session.invalidateAndCancel()
+        return success
+    }
+
     @objc func resetStrategies() {
         strategies = defaultStrategies
         if let encoded = try? JSONEncoder().encode(strategies) {
@@ -231,6 +372,82 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             try? "".write(to: logURL, atomically: true, encoding: .utf8)
         }
         NSWorkspace.shared.open(logURL)
+    }
+
+    // MARK: — SOCKS5 proxy
+
+    @objc func toggleSocks5() {
+        if socks5Process != nil {
+            stopSocks5()
+        } else {
+            startSocks5()
+        }
+    }
+
+    private func startSocks5() {
+        guard let tpwsPath = Bundle.main.path(forResource: "tpws", ofType: nil) else { return }
+
+        let savedId = UserDefaults.standard.string(forKey: "ZapretStrategyId") ?? "disorder_midsld"
+        let strategy = strategies.first(where: { $0.id == savedId }) ?? defaultStrategies[0]
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tpwsPath)
+        var args = ["--socks", "--port=\(Self.socks5Port)", "--bind-addr=127.0.0.1"]
+        // midsld — TLS-специфичный маркер, не работает в SOCKS5 режиме, заменяем на фиксированную позицию
+        let socks5Args = strategy.args
+            .replacingOccurrences(of: "split-pos=1,midsld", with: "split-pos=2")
+            .replacingOccurrences(of: "split-pos=midsld",   with: "split-pos=2")
+        args += socks5Args.components(separatedBy: " ").filter { !$0.isEmpty }
+        process.arguments = args
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError  = FileHandle.nullDevice
+
+        process.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async { self?.socks5DidStop() }
+        }
+
+        do {
+            try process.run()
+            socks5Process = process
+            socks5MenuItem.title = "SOCKS5 для Telegram: 127.0.0.1:\(Self.socks5Port) ●"
+            socks5MenuItem.state = .on
+            showSocks5Instructions()
+        } catch {
+            sendNotification(title: "Ошибка SOCKS5", body: "Не удалось запустить прокси.")
+        }
+    }
+
+    private func stopSocks5() {
+        socks5Process?.terminate()
+        socks5Process?.waitUntilExit()
+        socks5Process = nil
+        socks5DidStop()
+    }
+
+    private func socks5DidStop() {
+        socks5Process = nil
+        socks5MenuItem.title = "SOCKS5 для Telegram: выключен"
+        socks5MenuItem.state = .off
+    }
+
+    private func showSocks5Instructions() {
+        let alert = NSAlert()
+        alert.messageText = "SOCKS5 прокси запущен"
+        alert.informativeText = """
+            Настройки прокси для Telegram:
+
+            Тип:    SOCKS5
+            Сервер: 127.0.0.1
+            Порт:   \(Self.socks5Port)
+
+            Telegram → Settings → Privacy and Security → Proxy → Add Proxy → SOCKS5
+
+            Прокси работает на текущей стратегии.
+            Остановить: пункт "SOCKS5 для Telegram" в меню.
+            """
+        alert.addButton(withTitle: "Понятно")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     // MARK: — Zapret control
@@ -302,6 +519,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
+        socks5Process?.terminate()
+
         guard isRunning, let bundlePath = Bundle.main.resourcePath else { return }
         let scriptPath = "\(bundlePath)/wrapper.sh"
         if !runCommand(scriptPath: scriptPath, arguments: ["stop"]) {
