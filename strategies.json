@@ -1,13 +1,23 @@
 [
   {
+    "id": "youtube_flowseal_alt",
+    "name": "YouTube (Flowseal ALT)",
+    "args": "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1"
+  },
+  {
+    "id": "discord_flowseal",
+    "name": "Discord (Flowseal)",
+    "args": "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"
+  },
+  {
+    "id": "universal_heavy",
+    "name": "Universal (Heavy)",
+    "args": "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1 --new --filter-tcp=80 --methodeol"
+  },
+  {
     "id": "disorder_midsld",
     "name": "Disorder midsld (рекомендуется)",
     "args": "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"
-  },
-  {
-    "id": "disorder_oob",
-    "name": "Disorder + OOB",
-    "args": "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"
   },
   {
     "id": "tlsrec_sniext",
@@ -23,10 +33,5 @@
     "id": "disorder_pos2",
     "name": "Disorder pos=2",
     "args": "--filter-tcp=443 --split-pos=2 --disorder"
-  },
-  {
-    "id": "methodeol_only",
-    "name": "HTTP MethodEOL (только port 80)",
-    "args": "--filter-tcp=80 --methodeol"
   }
 ]

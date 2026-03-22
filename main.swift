@@ -21,12 +21,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private static let socks5Port = 9988
 
     let defaultStrategies: [Strategy] = [
-        Strategy(id: "disorder_midsld", name: "Disorder midsld (рекомендуется)", args: "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"),
-        Strategy(id: "disorder_oob",    name: "Disorder + OOB",                  args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"),
-        Strategy(id: "tlsrec_sniext",   name: "TLS Record (sniext)",             args: "--filter-tcp=443 --tlsrec=sniext+1"),
-        Strategy(id: "split_midsld",    name: "Split midsld",                    args: "--filter-tcp=443 --split-pos=midsld"),
-        Strategy(id: "disorder_pos2",   name: "Disorder pos=2",                  args: "--filter-tcp=443 --split-pos=2 --disorder"),
-        Strategy(id: "methodeol_only",  name: "HTTP MethodEOL (только port 80)", args: "--filter-tcp=80 --methodeol")
+        Strategy(id: "youtube_flowseal_alt", name: "YouTube (Flowseal ALT)", args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1"),
+        Strategy(id: "discord_flowseal",    name: "Discord (Flowseal)",    args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"),
+        Strategy(id: "universal_heavy",      name: "Universal (Heavy)",     args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1 --new --filter-tcp=80 --methodeol"),
+        Strategy(id: "disorder_midsld",     name: "Disorder midsld (рекомендуется)", args: "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"),
+        Strategy(id: "tlsrec_sniext",       name: "TLS Record (sniext)",             args: "--filter-tcp=443 --tlsrec=sniext+1"),
+        Strategy(id: "split_midsld",        name: "Split midsld",                    args: "--filter-tcp=443 --split-pos=midsld"),
+        Strategy(id: "disorder_pos2",       name: "Disorder pos=2",                  args: "--filter-tcp=443 --split-pos=2 --disorder")
     ]
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
