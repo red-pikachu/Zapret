@@ -372,7 +372,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private func startTpwsSOCKS(path: String, port: Int, args: String) -> Process {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
-        var arguments = ["--socks", "--port=\(port)", "--bind-addr=127.0.0.1"]
+        var arguments = ["--socks", "--port=\(port)", "--bind-addr=127.0.0.1", "--bind-addr=::1"]
         arguments += args.components(separatedBy: " ").filter { !$0.isEmpty }
         process.arguments = arguments
         process.standardOutput = FileHandle.nullDevice
@@ -477,6 +477,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "--port=\(Self.socks5Port)",
             "--socks",
             "--bind-addr=127.0.0.1",
+            "--bind-addr=::1",
             "--split-any-protocol",
             "--split-pos=2",
             "--disorder",

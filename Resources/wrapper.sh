@@ -24,10 +24,20 @@ patch_pf_conf() {
 rdr-anchor "zapret"
 ' "$PF_MAIN" && patched=1
     fi
+    if ! grep -q '^rdr-anchor "zapret-v6"$' "$PF_MAIN"; then
+        sed -i '' -e '/^rdr-anchor "com\.apple\/\*"$/i \
+rdr-anchor "zapret-v6"
+' "$PF_MAIN" && patched=1
+    fi
 
     if ! grep -q '^anchor "zapret"$' "$PF_MAIN"; then
         sed -i '' -e '/^anchor "com\.apple\/\*"$/i \
 anchor "zapret"
+' "$PF_MAIN" && patched=1
+    fi
+    if ! grep -q '^anchor "zapret-v6"$' "$PF_MAIN"; then
+        sed -i '' -e '/^anchor "com\.apple\/\*"$/i \
+anchor "zapret-v6"
 ' "$PF_MAIN" && patched=1
     fi
 
@@ -41,6 +51,7 @@ anchor "zapret"
 load_pf_anchors() {
     mkdir -p "$PF_ANCHOR_DIR"
 
+    # --- v4 Anchors ---
     cat > "$PF_ANCHOR_DIR/zapret" << 'ANCHOR_EOF'
 table <nozapret> persist
 rdr-anchor "/zapret-v4" inet to !<nozapret>
@@ -53,14 +64,31 @@ pass out route-to (lo0 127.0.0.1) inet proto tcp from !127.0.0.0/8 to any port {
 block drop out quick proto udp from any to any port 443
 RULES_EOF
 
+    # --- v6 Anchors ---
+    cat > "$PF_ANCHOR_DIR/zapret-v6-main" << 'ANCHOR_EOF'
+table <nozapret> persist
+rdr-anchor "/zapret-v6" inet6 to !<nozapret>
+anchor "/zapret-v6" inet6 to !<nozapret>
+ANCHOR_EOF
+
+    cat > "$PF_ANCHOR_DIR/zapret-v6" << RULES_EOF
+rdr on lo0 inet6 proto tcp from !::1 to any port {80,443} -> ::1 port $TPWS_PORT
+pass out route-to (lo0 ::1) inet6 proto tcp from !::1 to any port {80,443} user { >root }
+block drop out quick proto udp from any to any port 443
+RULES_EOF
+
     pfctl -qa zapret    -f "$PF_ANCHOR_DIR/zapret"    >> "$LOGFILE" 2>&1
     pfctl -qa zapret-v4 -f "$PF_ANCHOR_DIR/zapret-v4" >> "$LOGFILE" 2>&1
+    pfctl -qa zapret-v6 -f "$PF_ANCHOR_DIR/zapret-v6-main" >> "$LOGFILE" 2>&1
+    pfctl -qa zapret-v6/zapret-v6 -f "$PF_ANCHOR_DIR/zapret-v6" >> "$LOGFILE" 2>&1
 }
 
 # Remove our anchors from PF (traffic flows normally again).
 clear_pf_anchors() {
     pfctl -qa zapret-v4 -F all >> "$LOGFILE" 2>&1
     pfctl -qa zapret    -F all >> "$LOGFILE" 2>&1
+    pfctl -qa zapret-v6/zapret-v6 -F all >> "$LOGFILE" 2>&1
+    pfctl -qa zapret-v6 -F all >> "$LOGFILE" 2>&1
 }
 
 case "$COMMAND" in
@@ -91,9 +119,9 @@ case "$COMMAND" in
         load_pf_anchors
 
         # Launch tpws as root (--user=root prevents privilege drop).
-        echo "Launching: $TPWS --user=root --port=$TPWS_PORT --daemon $DESYNC_ARGS" >> "$LOGFILE"
+        echo "Launching: $TPWS --user=root --port=$TPWS_PORT --daemon --bind-addr=127.0.0.1 --bind-addr=::1 $DESYNC_ARGS" >> "$LOGFILE"
         "$TPWS" --user=root --port=$TPWS_PORT --daemon --pidfile="$PIDFILE" \
-            --bind-addr=127.0.0.1 \
+            --bind-addr=127.0.0.1 --bind-addr=::1 \
             $DESYNC_ARGS >> "$LOGFILE" 2>&1
 
         sleep 0.5
@@ -108,6 +136,16 @@ case "$COMMAND" in
         ;;
 
     status)
+        # Check if the port is listening AND if we have a valid PID in our file.
+        if [ -f "$PIDFILE" ]; then
+            OUR_PID=$(cat "$PIDFILE")
+            if ! kill -0 "$OUR_PID" 2>/dev/null; then
+                # Port might be up but PID is dead (zombie or other process)
+                echo "Stopped (Stale PID)"
+                exit 1
+            fi
+        fi
+
         if lsof -Pi :$TPWS_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
             echo "Running"
             exit 0
