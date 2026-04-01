@@ -435,12 +435,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // только HTTP и TLS. Поэтому ОБЯЗАТЕЛЬНО нужен флаг --split-any-protocol,
         // иначе пакеты будут проходить нетронутыми и блочиться DPI.
         process.arguments = [
-            "--socks", 
-            "--port=\(Self.socks5Port)", 
+            "--port=\(Self.socks5Port)",
+            "--socks",
             "--bind-addr=127.0.0.1",
             "--split-any-protocol",
-            "--split-pos=2",
-            "--disorder"
+            "--split-pos=1,midsld",
+            "--disorder",
+            "--hostcase",
+            "--hostdot",
+            "--methodeol"
         ]
         
         process.standardOutput = FileHandle.nullDevice
