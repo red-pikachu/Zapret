@@ -50,6 +50,7 @@ ANCHOR_EOF
     cat > "$PF_ANCHOR_DIR/zapret-v4" << RULES_EOF
 rdr on lo0 inet proto tcp from !127.0.0.0/8 to any port {80,443} -> 127.0.0.1 port $TPWS_PORT
 pass out route-to (lo0 127.0.0.1) inet proto tcp from !127.0.0.0/8 to any port {80,443} user { >root }
+block drop out quick proto udp from any to any port 443
 RULES_EOF
 
     pfctl -qa zapret    -f "$PF_ANCHOR_DIR/zapret"    >> "$LOGFILE" 2>&1
