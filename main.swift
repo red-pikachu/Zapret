@@ -21,13 +21,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private static let socks5Port = 9988
 
     let defaultStrategies: [Strategy] = [
-        Strategy(id: "youtube_flowseal_alt", name: "YouTube (Flowseal ALT)", args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1"),
-        Strategy(id: "discord_flowseal",    name: "Discord (Flowseal)",    args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"),
-        Strategy(id: "universal_heavy",      name: "Universal (Heavy)",     args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1 --new --filter-tcp=80 --methodeol"),
         Strategy(id: "disorder_midsld",     name: "Disorder midsld (рекомендуется)", args: "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"),
+        Strategy(id: "disorder_oob_midsld", name: "Disorder + OOB midsld",           args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"),
+        Strategy(id: "disorder_oob_tlsrec", name: "Disorder + OOB + TLSRec",         args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1"),
+        Strategy(id: "universal_heavy",     name: "Universal (Heavy)",               args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1 --new --filter-tcp=80 --methodeol"),
         Strategy(id: "tlsrec_sniext",       name: "TLS Record (sniext)",             args: "--filter-tcp=443 --tlsrec=sniext+1"),
+        Strategy(id: "tlsrec_midsld",       name: "TLS Record (midsld)",             args: "--filter-tcp=443 --tlsrec=midsld"),
         Strategy(id: "split_midsld",        name: "Split midsld",                    args: "--filter-tcp=443 --split-pos=midsld"),
-        Strategy(id: "disorder_pos2",       name: "Disorder pos=2",                  args: "--filter-tcp=443 --split-pos=2 --disorder")
+        Strategy(id: "split_sniext",        name: "Split sniext+1",                  args: "--filter-tcp=443 --split-pos=sniext+1"),
+        Strategy(id: "split_2_sniext",      name: "Split pos=2,sniext+1",            args: "--filter-tcp=443 --split-pos=2,sniext+1"),
+        Strategy(id: "disorder_pos2",       name: "Disorder pos=2",                  args: "--filter-tcp=443 --split-pos=2 --disorder"),
+        Strategy(id: "disorder_pos2_oob",   name: "Disorder pos=2 + OOB",            args: "--filter-tcp=443 --split-pos=2 --disorder --oob"),
+        Strategy(id: "disorder_sniext",     name: "Disorder sniext+1",               args: "--filter-tcp=443 --split-pos=sniext+1 --disorder"),
+        Strategy(id: "oob_midsld",          name: "OOB midsld",                      args: "--filter-tcp=443 --split-pos=midsld --oob"),
+        Strategy(id: "syndata_split",       name: "Syndata + Split",                 args: "--filter-tcp=443 --syndata --split-pos=1,midsld"),
+        Strategy(id: "methodeol_only",      name: "HTTP MethodEOL only",             args: "--filter-tcp=80 --methodeol")
     ]
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -419,16 +427,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func stopSocks5() {
-        socks5Process?.terminate()
-        socks5Process?.waitUntilExit()
+        guard let process = socks5Process else { return }
         socks5Process = nil
-        socks5DidStop()
+        socks5MenuItem.title = "SOCKS5 для Telegram: останавливается..."
+        socks5MenuItem.action = nil
+        process.terminate()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            process.waitUntilExit()
+            DispatchQueue.main.async {
+                self?.socks5DidStop()
+            }
+        }
     }
 
     private func socks5DidStop() {
         socks5Process = nil
         socks5MenuItem.title = "SOCKS5 для Telegram: выключен"
         socks5MenuItem.state = .off
+        socks5MenuItem.action = #selector(toggleSocks5)
     }
 
     private func showSocks5Instructions() {
@@ -453,19 +469,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     // MARK: — Zapret control
 
-    func runCommand(scriptPath: String, arguments: [String]) -> Bool {
-        let task = Process()
-        task.launchPath = "/usr/bin/sudo"
-        task.arguments = [scriptPath] + arguments
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch {
-            return false
+    func runCommand(scriptPath: String, arguments: [String], completion: @escaping (Bool) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let task = Process()
+            task.launchPath = "/usr/bin/sudo"
+            task.arguments = [scriptPath] + arguments
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = pipe
+            do {
+                try task.run()
+                task.waitUntilExit()
+                let success = task.terminationStatus == 0
+                DispatchQueue.main.async { completion(success) }
+            } catch {
+                DispatchQueue.main.async { completion(false) }
+            }
         }
     }
 
@@ -481,27 +500,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             args.append(strategy.args)
         }
 
-        // Тихий запуск через sudo (sudoers настроен)
-        if runCommand(scriptPath: scriptPath, arguments: args) {
-            isRunning.toggle()
-            updateUI()
-            return
-        }
+        // Блокируем кнопку на время выполнения
+        toggleMenuItem.action = nil
+        toggleMenuItem.title = isRunning ? "Останавливается..." : "Запускается..."
 
-        // Фоллбек: AppleScript с запросом пароля
-        let strategyArgs = args.dropFirst().joined(separator: " ")
-        let appleScript = """
-        do shell script "\(scriptPath) \(command) \(strategyArgs)" with administrator privileges
-        """
-        var error: NSDictionary?
-        if let script = NSAppleScript(source: appleScript) {
-            script.executeAndReturnError(&error)
-            if error == nil {
-                isRunning.toggle()
-                updateUI()
-            } else {
-                sendNotification(title: "Ошибка", body: "Не удалось \(command == "start" ? "запустить" : "остановить") Zapret.")
+        // Тихий запуск через sudo (sudoers настроен)
+        runCommand(scriptPath: scriptPath, arguments: args) { [weak self] success in
+            guard let self else { return }
+            if success {
+                self.isRunning.toggle()
+                self.updateUI()
+                self.toggleMenuItem.action = #selector(self.toggleZapret)
+                return
             }
+
+            // Фоллбек: AppleScript с запросом пароля
+            let strategyArgs = args.dropFirst().joined(separator: " ")
+            let appleScript = """
+            do shell script "\(scriptPath) \(command) \(strategyArgs)" with administrator privileges
+            """
+            var error: NSDictionary?
+            if let script = NSAppleScript(source: appleScript) {
+                script.executeAndReturnError(&error)
+                if error == nil {
+                    self.isRunning.toggle()
+                    self.updateUI()
+                } else {
+                    self.sendNotification(title: "Ошибка", body: "Не удалось \(command == "start" ? "запустить" : "остановить") Zapret.")
+                }
+            }
+            self.toggleMenuItem.action = #selector(self.toggleZapret)
         }
     }
 
@@ -521,10 +549,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     func applicationWillTerminate(_ aNotification: Notification) {
         socks5Process?.terminate()
+        socks5Process?.waitUntilExit()
 
         guard isRunning, let bundlePath = Bundle.main.resourcePath else { return }
         let scriptPath = "\(bundlePath)/wrapper.sh"
-        if !runCommand(scriptPath: scriptPath, arguments: ["stop"]) {
+        // При завершении приложения синхронный вызов допустим
+        let task = Process()
+        task.launchPath = "/usr/bin/sudo"
+        task.arguments = [scriptPath, "stop"]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        if let _ = try? task.run() {
+            task.waitUntilExit()
+            if task.terminationStatus != 0 {
+                if let script = NSAppleScript(source: "do shell script \"\(scriptPath) stop\" with administrator privileges") {
+                    script.executeAndReturnError(nil)
+                }
+            }
+        } else {
             if let script = NSAppleScript(source: "do shell script \"\(scriptPath) stop\" with administrator privileges") {
                 script.executeAndReturnError(nil)
             }
