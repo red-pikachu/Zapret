@@ -425,8 +425,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "--port=\(Self.socks5Port)", 
             "--bind-addr=127.0.0.1",
             "--split-pos=2",
-            "--disorder",
-            "--oob"
+            "--disorder"
         ]
         
         process.standardOutput = FileHandle.nullDevice
