@@ -1,4 +1,4 @@
-# Zapret2 macOS Native App
+# Zapret macOS Native App
 
 Нативное macOS-приложение (Status Bar) для управления [zapret2](https://github.com/bol-van/zapret2). Позволяет обходить DPI и замедления популярных ресурсов (YouTube, Discord, Telegram и др.) прямо из системного трея.
 
