@@ -414,18 +414,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private func startSocks5() {
         guard let tpwsPath = Bundle.main.path(forResource: "tpws", ofType: nil) else { return }
 
-        let savedId = UserDefaults.standard.string(forKey: "ZapretStrategyId") ?? "disorder_midsld"
-        let strategy = strategies.first(where: { $0.id == savedId }) ?? defaultStrategies[0]
-
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tpwsPath)
-        var args = ["--socks", "--port=\(Self.socks5Port)", "--bind-addr=127.0.0.1"]
-        // midsld — TLS-специфичный маркер, не работает в SOCKS5 режиме, заменяем на фиксированную позицию
-        let socks5Args = strategy.args
-            .replacingOccurrences(of: "split-pos=1,midsld", with: "split-pos=2")
-            .replacingOccurrences(of: "split-pos=midsld",   with: "split-pos=2")
-        args += socks5Args.components(separatedBy: " ").filter { !$0.isEmpty }
-        process.arguments = args
+        
+        // Telegram использует MTProto (бинарный протокол), поэтому TLS/HTTP специфичные
+        // параметры вроде tlsrec, methodeol или midsld ломают трафик.
+        // Используем универсальные TCP-параметры для SOCKS:
+        process.arguments = [
+            "--socks", 
+            "--port=\(Self.socks5Port)", 
+            "--bind-addr=127.0.0.1",
+            "--split-pos=2",
+            "--disorder",
+            "--oob"
+        ]
+        
         process.standardOutput = FileHandle.nullDevice
         process.standardError  = FileHandle.nullDevice
 
