@@ -434,17 +434,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Telegram использует MTProto (бинарный протокол). По умолчанию tpws ломает 
         // только HTTP и TLS. Поэтому ОБЯЗАТЕЛЬНО нужен флаг --split-any-protocol,
         // иначе пакеты будут проходить нетронутыми и блочиться DPI.
-        process.arguments = [
+        let args = [
             "--port=\(Self.socks5Port)",
             "--socks",
             "--bind-addr=127.0.0.1",
             "--split-any-protocol",
-            "--split-pos=1,midsld",
+            "--split-pos=2",
             "--disorder",
             "--hostcase",
             "--hostdot",
             "--methodeol"
         ]
+        process.arguments = args
         
         process.standardOutput = FileHandle.nullDevice
         process.standardError  = FileHandle.nullDevice
