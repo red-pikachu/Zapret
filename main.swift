@@ -51,6 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         loadStrategies()
         setupMenu()
         updateUI()
+        autoUpdateStrategies()
     }
 
     func sendNotification(title: String, body: String) {
@@ -211,6 +212,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
         UserDefaults.standard.set(urlString, forKey: "ZapretCustomSourceURL")
         fetchStrategies()
+    }
+
+    @objc func autoUpdateStrategies() {
+        guard let url = URL(string: strategiesSourceURL) else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+            guard let self = self, let data = data, error == nil else { return }
+            guard let decoded = try? JSONDecoder().decode([Strategy].self, from: data) else { return }
+            
+            DispatchQueue.main.async {
+                if self.strategies != decoded {
+                    self.strategies = decoded
+                    try? data.write(to: self.getStrategiesFileURL())
+                    self.rebuildStrategyMenu()
+                    self.sendNotification(title: "Стратегии обновлены", body: "Список стратегий автоматически обновлен из сети (\(decoded.count) шт.)")
+                }
+            }
+        }.resume()
     }
 
     // MARK: — Auto Strategy Detection
