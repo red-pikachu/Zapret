@@ -21,21 +21,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private static let socks5Port = 9988
 
     let defaultStrategies: [Strategy] = [
-        Strategy(id: "disorder_midsld",     name: "Disorder midsld (рекомендуется)", args: "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"),
-        Strategy(id: "disorder_oob_midsld", name: "Disorder + OOB midsld",           args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob"),
-        Strategy(id: "disorder_oob_tlsrec", name: "Disorder + OOB + TLSRec",         args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1"),
-        Strategy(id: "universal_heavy",     name: "Universal (Heavy)",               args: "--filter-tcp=443 --split-pos=1,midsld --disorder --oob --tlsrec=sniext+1 --new --filter-tcp=80 --methodeol"),
-        Strategy(id: "tlsrec_sniext",       name: "TLS Record (sniext)",             args: "--filter-tcp=443 --tlsrec=sniext+1"),
-        Strategy(id: "tlsrec_midsld",       name: "TLS Record (midsld)",             args: "--filter-tcp=443 --tlsrec=midsld"),
-        Strategy(id: "split_midsld",        name: "Split midsld",                    args: "--filter-tcp=443 --split-pos=midsld"),
-        Strategy(id: "split_sniext",        name: "Split sniext+1",                  args: "--filter-tcp=443 --split-pos=sniext+1"),
-        Strategy(id: "split_2_sniext",      name: "Split pos=2,sniext+1",            args: "--filter-tcp=443 --split-pos=2,sniext+1"),
-        Strategy(id: "disorder_pos2",       name: "Disorder pos=2",                  args: "--filter-tcp=443 --split-pos=2 --disorder"),
-        Strategy(id: "disorder_pos2_oob",   name: "Disorder pos=2 + OOB",            args: "--filter-tcp=443 --split-pos=2 --disorder --oob"),
-        Strategy(id: "disorder_sniext",     name: "Disorder sniext+1",               args: "--filter-tcp=443 --split-pos=sniext+1 --disorder"),
-        Strategy(id: "oob_midsld",          name: "OOB midsld",                      args: "--filter-tcp=443 --split-pos=midsld --oob"),
-        Strategy(id: "syndata_split",       name: "Syndata + Split",                 args: "--filter-tcp=443 --syndata --split-pos=1,midsld"),
-        Strategy(id: "methodeol_only",      name: "HTTP MethodEOL only",             args: "--filter-tcp=80 --methodeol")
+        Strategy(id: "youtube_final_2026",  name: "YouTube 2026 Turbo (disorder + hostcase)", args: "--filter-tcp=443 --split-pos=2 --disorder --hostcase --new --filter-tcp=80 --split-pos=2 --hostcase"),
+        Strategy(id: "discord_fix_2026",    name: "Discord Fix (midsld + disorder)",         args: "--filter-tcp=443 --split-pos=midsld --disorder --new --filter-tcp=80 --methodeol"),
+        Strategy(id: "universal_split_2",   name: "Universal Split-Pos=2 (Стабильная)",       args: "--split-pos=2 --disorder"),
+        Strategy(id: "hostdot_trick",       name: "HostDot Trick (обход ТСПУ 2026)",           args: "--filter-tcp=443 --split-pos=sniext+1 --disorder --hostdot"),
+        Strategy(id: "tls_sni_split",       name: "TLS SNI Split (sniext+1)",                 args: "--filter-tcp=443 --split-pos=sniext+1 --disorder"),
+        Strategy(id: "midsld_ultra",        name: "Mid-SLD Ultra (разбиение домена)",        args: "--filter-tcp=443 --split-pos=midsld --disorder"),
+        Strategy(id: "combined_2026",       name: "Combined 2026 (All-in-one)",               args: "--filter-tcp=443 --split-pos=1,midsld --disorder --hostcase --hostdot --new --filter-tcp=80 --methodeol")
     ]
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
