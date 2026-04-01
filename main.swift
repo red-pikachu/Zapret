@@ -165,13 +165,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             sendNotification(title: "Ошибка", body: "Некорректный URL источника.")
             return
         }
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
-            guard let data, error == nil else {
-                self?.sendNotification(title: "Ошибка загрузки", body: "Не удалось подключиться к источнику.")
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let data, let httpResponse = response as? HTTPURLResponse, error == nil else {
+                self?.sendNotification(title: "Ошибка загрузки", body: "Не удалось подключиться к серверу.")
                 return
             }
+            
+            if httpResponse.statusCode == 404 || httpResponse.statusCode == 403 {
+                self?.sendNotification(title: "Доступ ограничен", body: "Репозиторий приватный. Сделайте его публичным на GitHub.")
+                return
+            }
+            
+            if httpResponse.statusCode != 200 {
+                self?.sendNotification(title: "Ошибка сервера", body: "Сервер вернул код \(httpResponse.statusCode).")
+                return
+            }
+
             guard let decoded = try? JSONDecoder().decode([Strategy].self, from: data) else {
-                self?.sendNotification(title: "Ошибка формата", body: "Файл не является корректным strategies.json.")
+                self?.sendNotification(title: "Ошибка формата", body: "Файл на сервере поврежден или имеет неверный формат.")
                 return
             }
             DispatchQueue.main.async {
@@ -208,8 +219,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     @objc func autoUpdateStrategies() {
         guard let url = URL(string: strategiesSourceURL) else { return }
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
-            guard let self = self, let data = data, error == nil else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self, let data = data, let httpResponse = response as? HTTPURLResponse, 
+                  httpResponse.statusCode == 200, error == nil else { return }
             guard let decoded = try? JSONDecoder().decode([Strategy].self, from: data) else { return }
             
             DispatchQueue.main.async {
