@@ -417,13 +417,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tpwsPath)
         
-        // Telegram использует MTProto (бинарный протокол), поэтому TLS/HTTP специфичные
-        // параметры вроде tlsrec, methodeol или midsld ломают трафик.
-        // Используем универсальные TCP-параметры для SOCKS:
+        // Telegram использует MTProto (бинарный протокол). По умолчанию tpws ломает 
+        // только HTTP и TLS. Поэтому ОБЯЗАТЕЛЬНО нужен флаг --split-any-protocol,
+        // иначе пакеты будут проходить нетронутыми и блочиться DPI.
         process.arguments = [
             "--socks", 
             "--port=\(Self.socks5Port)", 
             "--bind-addr=127.0.0.1",
+            "--split-any-protocol",
             "--split-pos=2",
             "--disorder"
         ]
