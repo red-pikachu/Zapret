@@ -1,5 +1,59 @@
+# macOS
 .DS_Store
-Zapret2Mac.xcodeproj/project.xcworkspace/xcuserdata/
-Zapret2Mac.xcodeproj/xcuserdata/
+.DS_Store?
+.AppleDouble
+.LSOverride
+Icon
+
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Xcode
+#
+# gitignore contributors: ghostbroom, m_v_p, gsc_gr, tobin_h
+
+## Build generated
+build/
 DerivedData/
+
+## Various settings
 *.xcuserstate
+project.mode.1v3
+project.mode.2v3
+*.perspectivev3
+xcuserdata/
+
+## Other
+*.xccheckout
+*.moved-aside
+*.pc
+*.xmmap
+*.bak
+*.ipa
+*.xcscheme
+*.plist
+
+## Generated project files
+Zapret2Mac.xcodeproj/
+Zapret.app/
+
+# Temp files
+*.tmp
+*.temp
+*.swp
+*~
+
+# Icons and assets
+icon.png
+MyIcon.icns
+MyIcon.iconset/
