@@ -21,13 +21,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private static let socks5Port = 9988
 
     let defaultStrategies: [Strategy] = [
-        Strategy(id: "youtube_final_2026",  name: "YouTube 2026 Turbo (disorder + hostcase)", args: "--filter-tcp=443 --split-pos=2 --disorder --hostcase --new --filter-tcp=80 --split-pos=2 --hostcase"),
-        Strategy(id: "discord_fix_2026",    name: "Discord Fix (midsld + disorder)",         args: "--filter-tcp=443 --split-pos=midsld --disorder --new --filter-tcp=80 --methodeol"),
-        Strategy(id: "universal_split_2",   name: "Universal Split-Pos=2 (Стабильная)",       args: "--split-pos=2 --disorder"),
-        Strategy(id: "hostdot_trick",       name: "HostDot Trick (обход ТСПУ 2026)",           args: "--filter-tcp=443 --split-pos=sniext+1 --disorder --hostdot"),
-        Strategy(id: "tls_sni_split",       name: "TLS SNI Split (sniext+1)",                 args: "--filter-tcp=443 --split-pos=sniext+1 --disorder"),
-        Strategy(id: "midsld_ultra",        name: "Mid-SLD Ultra (разбиение домена)",        args: "--filter-tcp=443 --split-pos=midsld --disorder"),
-        Strategy(id: "combined_2026",       name: "Combined 2026 (All-in-one)",               args: "--filter-tcp=443 --split-pos=1,midsld --disorder --hostcase --hostdot --new --filter-tcp=80 --methodeol")
+        Strategy(id: "youtube_final_2026",  name: "🔥 YouTube 2026 Turbo (disorder + hostcase)", args: "--filter-tcp=443 --split-pos=2 --disorder --hostcase --new --filter-tcp=80 --split-pos=2 --hostcase"),
+        Strategy(id: "discord_fix_2026",    name: "🔥 Discord Fix (midsld + disorder)",         args: "--filter-tcp=443 --split-pos=midsld --disorder --new --filter-tcp=80 --methodeol"),
+        Strategy(id: "combined_2026",       name: "🔥 Combined 2026 (All-in-one)",               args: "--filter-tcp=443 --split-pos=1,midsld --disorder --hostcase --hostdot --new --filter-tcp=80 --methodeol"),
+        Strategy(id: "disorder_midsld",     name: "Classic: Disorder midsld",                   args: "--filter-tcp=80 --methodeol --new --filter-tcp=443 --split-pos=1,midsld --disorder"),
+        Strategy(id: "universal_split_2",   name: "Classic: Universal Split-Pos=2",              args: "--split-pos=2 --disorder"),
+        Strategy(id: "tls_sniext",          name: "Classic: TLS Record (sniext)",                args: "--filter-tcp=443 --tlsrec=sniext+1"),
+        Strategy(id: "split_midsld",        name: "Classic: Split midsld",                       args: "--filter-tcp=443 --split-pos=midsld"),
+        Strategy(id: "split_sniext",        name: "Classic: Split sniext+1",                     args: "--filter-tcp=443 --split-pos=sniext+1"),
+        Strategy(id: "disorder_pos2",       name: "Classic: Disorder pos=2",                     args: "--filter-tcp=443 --split-pos=2 --disorder"),
+        Strategy(id: "disorder_sniext",     name: "Classic: Disorder sniext+1",                  args: "--filter-tcp=443 --split-pos=sniext+1 --disorder"),
+        Strategy(id: "syndata_split",       name: "Classic: Syndata + Split",                    args: "--filter-tcp=443 --syndata --split-pos=1,midsld"),
+        Strategy(id: "hostdot_trick",       name: "HostDot Trick (обход ТСПУ 2026)",              args: "--filter-tcp=443 --split-pos=sniext+1 --disorder --hostdot"),
+        Strategy(id: "methodeol_only",      name: "HTTP MethodEOL only",                         args: "--filter-tcp=80 --methodeol")
     ]
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -161,7 +167,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     @objc func fetchStrategies() {
-        guard let url = URL(string: strategiesSourceURL) else {
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let cacheBustingURLString = strategiesSourceURL + "?t=\(timestamp)"
+        guard let url = URL(string: cacheBustingURLString) else {
             sendNotification(title: "Ошибка", body: "Некорректный URL источника.")
             return
         }
@@ -218,7 +226,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     @objc func autoUpdateStrategies() {
-        guard let url = URL(string: strategiesSourceURL) else { return }
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let cacheBustingURLString = strategiesSourceURL + "?t=\(timestamp)"
+        guard let url = URL(string: cacheBustingURLString) else { return }
         URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
             guard let self = self, let data = data, let httpResponse = response as? HTTPURLResponse, 
                   httpResponse.statusCode == 200, error == nil else { return }
