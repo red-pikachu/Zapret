@@ -9,7 +9,11 @@ struct Strategy: Codable, Equatable {
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     var statusItem: NSStatusItem!
-    var isRunning = false
+    var isRunning = false {
+        didSet { updateUI() }
+    }
+    
+    private var statusTimer: Timer?
     var statusMenuItem: NSMenuItem!
     var toggleMenuItem: NSMenuItem!
     var strategyMenu: NSMenu!
@@ -49,7 +53,35 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         loadStrategies()
         setupMenu()
         updateUI()
-        autoUpdateStrategies()
+        
+        // Начинаем мониторинг реального статуса процесса
+        startStatusMonitoring()
+        
+        // Автообновление в фоне при запуске
+        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 5) { [weak self] in
+            self?.autoUpdateStrategies()
+        }
+    }
+
+    private func startStatusMonitoring() {
+        statusTimer?.invalidate()
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.checkActualStatus()
+        }
+        checkActualStatus() // Первый запуск сразу
+    }
+
+    private func checkActualStatus() {
+        guard let bundlePath = Bundle.main.resourcePath else { return }
+        let scriptPath = "\(bundlePath)/wrapper.sh"
+        
+        runCommand(scriptPath: scriptPath, arguments: ["status"]) { [weak self] success in
+            DispatchQueue.main.async {
+                if self?.isRunning != success {
+                    self?.isRunning = success
+                }
+            }
+        }
     }
 
     func sendNotification(title: String, body: String) {
@@ -155,8 +187,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         strategyMenu.items.forEach { $0.state = ($0 == sender) ? .on : .off }
 
         if isRunning {
-            toggleZapret()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { self.toggleZapret() }
+            let bundlePath = Bundle.main.resourcePath ?? ""
+            let scriptPath = "\(bundlePath)/wrapper.sh"
+            let strategy = strategies.first(where: { $0.id == id }) ?? defaultStrategies[0]
+            
+            // Запускаем "restart" - он сам остановит старое и запустит новое
+            toggleMenuItem.title = "Перезапуск..."
+            runCommand(scriptPath: scriptPath, arguments: ["restart", strategy.args]) { [weak self] _ in
+                self?.updateUI()
+            }
         }
     }
 
@@ -546,26 +585,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Тихий запуск через sudo (sudoers настроен)
         runCommand(scriptPath: scriptPath, arguments: args) { [weak self] success in
             guard let self else { return }
-            if success {
-                self.isRunning.toggle()
-                self.updateUI()
-                self.toggleMenuItem.action = #selector(self.toggleZapret)
-                return
-            }
-
-            // Фоллбек: AppleScript с запросом пароля
-            let strategyArgs = args.dropFirst().joined(separator: " ")
-            let appleScript = """
-            do shell script "\(scriptPath) \(command) \(strategyArgs)" with administrator privileges
-            """
-            var error: NSDictionary?
-            if let script = NSAppleScript(source: appleScript) {
-                script.executeAndReturnError(&error)
-                if error == nil {
-                    self.isRunning.toggle()
-                    self.updateUI()
-                } else {
-                    self.sendNotification(title: "Ошибка", body: "Не удалось \(command == "start" ? "запустить" : "остановить") Zapret.")
+            
+            // Сразу проверяем реальный результат через status
+            self.checkActualStatus()
+            
+            if !success {
+                // Фоллбек: AppleScript с запросом пароля
+                let strategyArgs = args.dropFirst().joined(separator: " ")
+                let appleScript = """
+                do shell script "\(scriptPath) \(command) \(strategyArgs)" with administrator privileges
+                """
+                var error: NSDictionary?
+                if let script = NSAppleScript(source: appleScript) {
+                    script.executeAndReturnError(&error)
+                    self.checkActualStatus() // Еще раз проверяем после AppleScript
                 }
             }
             self.toggleMenuItem.action = #selector(self.toggleZapret)

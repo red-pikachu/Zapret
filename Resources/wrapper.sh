@@ -67,15 +67,27 @@ case "$COMMAND" in
     start)
         echo "$(date) - Starting Zapret2 (tpws). Strategy: $DESYNC_ARGS" > "$LOGFILE"
 
-        # Stop previous instance if any.
+        # Stop previous instance if any (be aggressive).
         if [ -f "$PIDFILE" ]; then
-            kill "$(cat "$PIDFILE")" 2>/dev/null
+            OLD_PID=$(cat "$PIDFILE")
+            echo "Stopping old instance (PID $OLD_PID)..." >> "$LOGFILE"
+            kill "$OLD_PID" 2>/dev/null
+            for i in {1..10}; do
+                kill -0 "$OLD_PID" 2>/dev/null || break
+                sleep 0.2
+            done
+            kill -9 "$OLD_PID" 2>/dev/null
             rm -f "$PIDFILE"
         fi
+        
+        # Ensure no other tpws is on our port (just in case)
+        # Note: We only kill the root one to not touch the SOCKS5 proxy
+        lsof -ti tcp:$TPWS_PORT | xargs kill -9 2>/dev/null || true
 
         # Enable PF, patch pf.conf, load anchors.
         pfctl -qe >> "$LOGFILE" 2>&1
         patch_pf_conf
+        clear_pf_anchors
         load_pf_anchors
 
         # Launch tpws as root (--user=root prevents privilege drop).
@@ -95,24 +107,45 @@ case "$COMMAND" in
         fi
         ;;
 
+    status)
+        if lsof -Pi :$TPWS_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "Running"
+            exit 0
+        else
+            echo "Stopped"
+            exit 1
+        fi
+        ;;
+
     stop)
         echo "$(date) - Stopping Zapret2 (tpws)..." >> "$LOGFILE"
-
         clear_pf_anchors
 
+        # Kill by PID file first
         if [ -f "$PIDFILE" ]; then
-            kill "$(cat "$PIDFILE")" 2>/dev/null
-            sleep 0.3
+            OLD_PID=$(cat "$PIDFILE")
+            echo "Killing PID $OLD_PID..." >> "$LOGFILE"
+            kill "$OLD_PID" 2>/dev/null
+            sleep 0.5
+            kill -9 "$OLD_PID" 2>/dev/null
             rm -f "$PIDFILE"
         fi
-        killall tpws >> "$LOGFILE" 2>&1 || true
-
+        
+        # Kill anything still on the port (just in case)
+        lsof -ti tcp:$TPWS_PORT | xargs kill -9 2>/dev/null || true
+        
         echo "Zapret2 stopped." >> "$LOGFILE"
         echo "Stopped"
         ;;
 
+    restart)
+        "$0" stop
+        sleep 1
+        "$0" start "$DESYNC_ARGS"
+        ;;
+
     *)
-        echo "Usage: $0 {start|stop} [tpws strategy args]"
+        echo "Usage: $0 {start|stop|restart|status} [tpws strategy args]"
         exit 1
         ;;
 esac
